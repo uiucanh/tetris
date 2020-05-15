@@ -1,6 +1,4 @@
-import sywhile child < pop_size:
-        block_pool = [0, 4, 8, 12, 16, 20, 24] if len(block_pool) == 0 else \
-            block_pos
+import sys
 import io
 import pickle
 
@@ -22,19 +20,12 @@ tetris = pyboy.game_wrapper()
 tetris.start_game()
 
 # Set block animation to fall instantly
-# pyboy.set_memory_value(0xff9a, 0)
-with open('neat_models/64.33', 'rb') as f:
+pyboy.set_memory_value(0xff9a, 1)
+with open('neat_models/746927', 'rb') as f:
     model = pickle.load(f)
 block_pool = []
 
 while not pyboy.tick():
-    block_pool = [0, 4, 8, 12, 16, 20, 24] if len(block_pool) == 0 else \
-        block_pool
-    next_piece = np.random.choice(block_pool)
-    block_pool.remove(next_piece)
-    # Set the next piece to random
-    pyboy.set_memory_value(0xc213, next_piece)
-
     # Beginning of action
     best_child_score = np.NINF
     best_action = {'Turn': 0, 'Left': 0, 'Right': 0}
