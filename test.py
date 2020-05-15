@@ -15,28 +15,50 @@ from pyboy import PyBoy, WindowEvent # isort:skip
 
 quiet = "--quiet" in sys.argv
 pyboy = PyBoy('tetris_1.gb', window_type="headless" if quiet else "SDL2", game_wrapper=True)
-pyboy.set_emulation_speed(1)
+pyboy.set_emulation_speed(0)
 
 tetris = pyboy.game_wrapper()
-tetris.start_game()
 
+while True:
+    pyboy.tick()
+    pyboy.botsupport_manager().tilemap_background().refresh_lcdc()
+    if pyboy.botsupport_manager().tilemap_background()[2:9, 14] == \
+            [89, 25, 21, 10, 34, 14, 27]:
+        break
+
+np.random.seed()
+s = np.random.randint(1, 60, size=(1,))[0]
+for _ in range(s):
+    pyboy.tick()
+
+for _ in range(3):
+    pyboy.send_input(WindowEvent.PRESS_BUTTON_START)
+    pyboy.tick()
+    pyboy.send_input(WindowEvent.RELEASE_BUTTON_START)
+
+    for _ in range(6):
+        pyboy.tick()
 
 blank_tile = 47
 first_brick = False
 
 while not pyboy.tick():  # Enough frames for the test. Otherwise do: `while not pyboy.tick():`
-    s_lines = pyboy.get_memory_value(0xff9e)
+    pyboy.tick()
 
-    if pyboy.paused:
-        area = np.asarray(tetris.game_area())
-        area = (area != 47).astype(np.int16)
-        agg_height, e_lines, n_holes, bumpiness = get_board_info(area,
-                                                                 pyboy, s_lines)
-        print({
-            'agg_height': agg_height,
-            'n_holes': n_holes,
-            'e_lines': e_lines,
-            'bumpiness': bumpiness})
+
+
+    # s_lines = pyboy.get_memory_value(0xff9e)
+    # print(pyboy.get_memory_value(0xc0a3))
+    # if pyboy.paused:
+    #     area = np.asarray(tetris.game_area())
+    #     area = (area != 47).astype(np.int16)
+    #     agg_height, e_lines, n_holes, bumpiness = get_board_info(area,
+    #                                                              pyboy, s_lines)
+    #     print({
+    #         'agg_height': agg_height,
+    #         'n_holes': n_holes,
+    #         'e_lines': e_lines,
+    #         'bumpiness': bumpiness})
         #     # 'min_cons_height_diff': min_cons_height_diff,
         #     # 'max_cons_height_diff': max_cons_height_diff,
         #     # 'max_height_diff': max_height_diff,

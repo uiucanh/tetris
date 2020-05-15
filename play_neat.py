@@ -1,9 +1,11 @@
-import sys
+import sywhile child < pop_size:
+        block_pool = [0, 4, 8, 12, 16, 20, 24] if len(block_pool) == 0 else \
+            block_pos
 import io
 import pickle
 
 from core.utils import *
-from core.neat import *
+from core.gen_algo import *
 from pyboy import PyBoy
 
 max_fitness = 0
@@ -12,7 +14,7 @@ epoch = 0
 pop_size = 50
 
 quiet = "--quiet" in sys.argv
-pyboy = PyBoy('tetris_1.gb', game_wrapper=True,
+pyboy = PyBoy('tetris.gb', game_wrapper=True,
               window_type="headless" if quiet else "SDL2")
 pyboy.set_emulation_speed(0)
 
@@ -21,7 +23,7 @@ tetris.start_game()
 
 # Set block animation to fall instantly
 # pyboy.set_memory_value(0xff9a, 0)
-with open('neat_models/100.67', 'rb') as f:
+with open('neat_models/64.33', 'rb') as f:
     model = pickle.load(f)
 block_pool = []
 
@@ -34,7 +36,7 @@ while not pyboy.tick():
     pyboy.set_memory_value(0xc213, next_piece)
 
     # Beginning of action
-    best_child_score = -np.inf
+    best_child_score = np.NINF
     best_action = {'Turn': 0, 'Left': 0, 'Right': 0}
     begin_state = io.BytesIO()
     begin_state.seek(0)
@@ -44,14 +46,12 @@ while not pyboy.tick():
     block_tile = pyboy.get_memory_value(0xc203)
     turns_needed = check_needed_turn(block_tile)
     lefts_needed, rights_needed = check_needed_dirs(block_tile)
-    count = 0
 
     # Do middle
     for move_dir in do_action('Middle', pyboy, n_dir=1,
                               n_turn=turns_needed):
-        count += 1
         score = get_score(tetris.game_area(), model,
-                          pyboy)
+                          pyboy, neat=True)
         if score is not None and score > best_child_score:
             best_child_score = score
             best_action = {'Turn': move_dir['Turn'],
@@ -63,9 +63,8 @@ while not pyboy.tick():
     # Do left
     for move_dir in do_action('Left', pyboy, n_dir=lefts_needed,
                               n_turn=turns_needed):
-        count += 1
         score = get_score(tetris.game_area(), model,
-                          pyboy)
+                          pyboy, neat=True)
         if score is not None and score > best_child_score:
             best_child_score = score
             best_action = {'Turn': move_dir['Turn'],
@@ -77,9 +76,8 @@ while not pyboy.tick():
     # Do right
     for move_dir in do_action('Right', pyboy, n_dir=rights_needed,
                               n_turn=turns_needed):
-        count += 1
         score = get_score(tetris.game_area(), model,
-                          pyboy)
+                          pyboy, neat=True)
         if score is not None and score > best_child_score:
             best_child_score = score
             best_action = {'Turn': move_dir['Turn'],
@@ -89,8 +87,6 @@ while not pyboy.tick():
         pyboy.load_state(begin_state)
 
     # Do best action
-    print(best_child_score)
-    count = 0
     for i in range(best_action['Turn']):
         do_turn(pyboy)
     for i in range(best_action['Left']):
@@ -99,7 +95,6 @@ while not pyboy.tick():
         do_sideway(pyboy, 'Right')
     drop_down(pyboy)
     pyboy.tick()
-    best_child_score = -np.inf
 
     # Game over:
     if pyboy.get_memory_value(0xffe1) == 13:

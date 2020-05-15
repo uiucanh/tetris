@@ -1,54 +1,59 @@
-import sys
 import io
 
 from datetime import datetime
-from core.utils import check_needed_turn, do_action, drop_down, \
-    do_sideway, do_turn, check_needed_dirs
+from core.utils import *
 from core.gen_algo import *
-from pyboy import PyBoy, WindowEvent
+from pyboy import PyBoy
+from multiprocessing import Pool, cpu_count
 
-
-max_fitness = 0
+epochs = 10
 population = None
-epoch = 0
+max_fitness = 0
+blank_tile = 47
 pop_size = 50
-
-quiet = "--quiet" in sys.argv
-pyboy = PyBoy('tetris_1.gb', game_wrapper=True,
-              window_type="headless" if quiet else "SDL2")
-pyboy.set_emulation_speed(0)
+max_action_count = 1000
+n_workers = int(cpu_count() / 2)
 
 
-tetris = pyboy.game_wrapper()
-tetris.start_game()
+def custom_start(pyboy):
+    # This replaces pyboy start function to get some randomness
+    while True:
+        pyboy.tick()
+        pyboy.botsupport_manager().tilemap_background().refresh_lcdc()
+        if pyboy.botsupport_manager().tilemap_background()[2:9, 14] == \
+                [89, 25, 21, 10, 34, 14, 27]:
+            break
 
-# Set block animation to fall instantly
-pyboy.set_memory_value(0xff9a, 0)
-# action_count = 0
-block_pool = []
-while epoch < 25:
-    start_time = datetime.now()
-    if population is None:
-        population = Population(size=pop_size)
-    else:
-        population = Population(size=pop_size, old_population=population)
-    child = 0
+    np.random.seed()
+    for _ in range(np.random.randint(1, 60, size=(1,))[0]):
+        pyboy.tick()
+
+    for _ in range(3):
+        pyboy.send_input(WindowEvent.PRESS_BUTTON_START)
+        pyboy.tick()
+        pyboy.send_input(WindowEvent.RELEASE_BUTTON_START)
+
+        for _ in range(6):
+            pyboy.tick()
+
+
+def eval_genome(epoch, child_index, child_model):
+    pyboy = PyBoy('tetris.gb', game_wrapper=True, window_type="headless")
+    pyboy.set_emulation_speed(0)
+    tetris = pyboy.game_wrapper()
+    custom_start(pyboy)
+
+    # Set block animation to fall instantly
+    pyboy.set_memory_value(0xff9a, 1)
     action_count = 0
 
-    while child < pop_size:
-        block_pool = [0, 4, 8, 12, 16, 20, 24] if len(block_pool) == 0 else \
-            block_pool
-        next_piece = np.random.choice(block_pool)
-        block_pool.remove(next_piece)
-        # Set the next piece to random
-        pyboy.set_memory_value(0xc213, next_piece)
-
+    while not pyboy.tick():
         # Beginning of action
-        best_child_score = -np.inf
+        best_action_score = np.NINF
         best_action = {'Turn': 0, 'Left': 0, 'Right': 0}
         begin_state = io.BytesIO()
         begin_state.seek(0)
-        beginning = pyboy.save_state(begin_state)
+        pyboy.save_state(begin_state)
 
         # Determine how many possible rotations we need to check for the block
         block_tile = pyboy.get_memory_value(0xc203)
@@ -58,10 +63,10 @@ while epoch < 25:
         # Do middle
         for move_dir in do_action('Middle', pyboy, n_dir=1,
                                   n_turn=turns_needed):
-            score = get_score(tetris.game_area(), population.models[child],
+            score = get_score(tetris.game_area(), child_model,
                               pyboy)
-            if score is not None and score > best_child_score:
-                best_child_score = score
+            if score is not None and score >= best_action_score:
+                best_action_score = score
                 best_action = {'Turn': move_dir['Turn'],
                                'Left': move_dir['Left'],
                                'Right': move_dir['Right']}
@@ -71,10 +76,10 @@ while epoch < 25:
         # Do left
         for move_dir in do_action('Left', pyboy, n_dir=lefts_needed,
                                   n_turn=turns_needed):
-            score = get_score(tetris.game_area(), population.models[child],
+            score = get_score(tetris.game_area(), child_model,
                               pyboy)
-            if score is not None and score > best_child_score:
-                best_child_score = score
+            if score is not None and score >= best_action_score:
+                best_action_score = score
                 best_action = {'Turn': move_dir['Turn'],
                                'Left': move_dir['Left'],
                                'Right': move_dir['Right']}
@@ -84,10 +89,10 @@ while epoch < 25:
         # Do right
         for move_dir in do_action('Right', pyboy, n_dir=rights_needed,
                                   n_turn=turns_needed):
-            score = get_score(tetris.game_area(), population.models[child],
+            score = get_score(tetris.game_area(), child_model,
                               pyboy)
-            if score is not None and score > best_child_score:
-                best_child_score = score
+            if score is not None and score >= best_action_score:
+                best_action_score = score
                 best_action = {'Turn': move_dir['Turn'],
                                'Left': move_dir['Left'],
                                'Right': move_dir['Right']}
@@ -95,35 +100,52 @@ while epoch < 25:
             pyboy.load_state(begin_state)
 
         # Do best action
-        for i in range(best_action['Turn']):
+        for _ in range(best_action['Turn']):
             do_turn(pyboy)
-        for i in range(best_action['Left']):
+        for _ in range(best_action['Left']):
             do_sideway(pyboy, 'Left')
-        for i in range(best_action['Right']):
+        for _ in range(best_action['Right']):
             do_sideway(pyboy, 'Right')
         drop_down(pyboy)
         pyboy.tick()
-        best_child_score = -np.inf
         action_count += 1
 
         # Game over:
-        if pyboy.get_memory_value(0xffe1) == 13 or action_count > 100:
-            # Giving more weights to lines score
-            child_fitness = tetris.fitness + pyboy.get_memory_value(0xff9e) \
-                            * 100
-            population.fitnesses = np.append(population.fitnesses,
-                                             child_fitness)
+        if pyboy.get_memory_value(0xffe1) == 13 \
+                or action_count > max_action_count:
+            child_fitness = tetris.score
             print("-" * 20)
-            print("Iteration %s - child %s" % (epoch, child))
-            print("Fitness: %s" % population.fitnesses[-1])
-            child += 1
-            tetris.reset_game()
+            print("Iteration %s - child %s" % (epoch, child_index))
+            if action_count > max_action_count:
+                print("Stop because of max action count")
+            print("Score: %s, Level: %s, Lines %s" %
+                  (tetris.score, tetris.level, tetris.lines))
+            print("Fitness: %s" % child_fitness)
+            pyboy.stop()
 
-    print("Iteration %s fitnesses %s" % (epoch, population.fitnesses))
+            return child_fitness
+
+
+for e in range(epochs):
+    start_time = datetime.now()
+    if population is None:
+        population = Population(size=pop_size)
+    else:
+        population = Population(size=pop_size, old_population=population)
+
+    p = Pool(n_workers)
+    result = []
+    for i in range(pop_size):
+        result.append(p.apply_async(eval_genome, (e, i, population.models[i])))
+
+    for i in range(pop_size):
+        population.fitnesses[i] = result[i].get()
+
+    print("Iteration %s fitnesses %s" % (e, np.round(population.fitnesses,2)))
     print(
-        "Iteration %s max fitness %s " % (epoch, np.max(population.fitnesses)))
+        "Iteration %s max fitness %s " % (e, np.max(population.fitnesses)))
     print(
-        "Iteration %s mean fitness %s " % (epoch, np.mean(
+        "Iteration %s mean fitness %s " % (e, np.mean(
             population.fitnesses)))
     print("Time took", datetime.now() - start_time)
 
@@ -134,6 +156,4 @@ while epoch < 25:
         torch.save(
             population.models[np.argmax(population.fitnesses)].state_dict(),
             'models/%s' % file_name)
-    epoch += 1
-
-pyboy.stop()
+    e += 1

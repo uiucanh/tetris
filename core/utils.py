@@ -44,6 +44,33 @@ def get_board_info(area, pyboy, concat=True):
 
     # Shortest and tallest col
     agg_height = np.sum(peaks)
+
+    # Number of empty holes
+    holes = get_holes(peaks, area)
+    n_holes = np.sum(holes)
+
+    # Height differences between consecutive cols
+    height_diffs = get_height_diffs(peaks)
+    bumpiness = np.sum(height_diffs)
+
+    if not concat:
+        return agg_height, n_holes, bumpiness
+    return \
+        np.array([agg_height, n_holes, bumpiness])
+
+
+def get_board_info_for_neat(area, concat=True):
+    # Num of rows - first occurrence of 1
+    peaks = np.array([])
+    for col in range(area.shape[1]):
+        if 1 in area[:, col]:
+            p = area.shape[0] - np.argmax(area[:, col], axis=0)
+            peaks = np.append(peaks, p)
+        else:
+            peaks = np.append(peaks, 0)
+
+    # Shortest and tallest col
+    agg_height = np.sum(peaks)
     shortest = np.min(peaks)
     tallest = np.max(peaks)
     max_height_diff = tallest - shortest
@@ -86,12 +113,12 @@ def get_board_info(area, pyboy, concat=True):
 
     if not concat:
         return agg_height, n_holes, bumpiness, shortest, tallest, \
-               max_height_diff, max_col_holes, n_col_with_holes, num_pieces,\
+               max_height_diff, max_col_holes, n_col_with_holes, num_pieces, \
                num_pits
     return \
         np.array([agg_height, n_holes, bumpiness, shortest, tallest, \
-               max_height_diff, max_col_holes, n_col_with_holes, num_pieces,\
-               num_pits])
+                  max_height_diff, max_col_holes, n_col_with_holes, num_pieces, \
+                  num_pits])
 
 
 def get_height_diffs(peaks):

@@ -1,59 +1,71 @@
-import sys
 import io
-import multiprocessing
 import neat
 import numpy as np
 import os
 import pickle
 import visualize
 
-from datetime import datetime
-from core.neat import get_score
+from core.gen_algo import get_score
 from core.utils import check_needed_turn, do_action, drop_down, \
     do_sideway, do_turn, check_needed_dirs
-from pyboy import PyBoy
+from multiprocessing import cpu_count
+from pyboy import PyBoy, WindowEvent
 
+
+epochs = 10
 max_fitness = 0
-epoch = 0
-start_y = 24
 blank_tile = 47
 pop_size = 50
-run_per_child = 3
+max_action_count = 1000
+max_score = 999999
+n_workers = int(cpu_count() / 2)
+
+
+def custom_start(pyboy):
+    # This replaces pyboy start function to get some randomness
+    while True:
+        pyboy.tick()
+        pyboy.botsupport_manager().tilemap_background().refresh_lcdc()
+        if pyboy.botsupport_manager().tilemap_background()[2:9, 14] == \
+                [89, 25, 21, 10, 34, 14, 27]:
+            break
+
+    np.random.seed()
+    for _ in range(np.random.randint(1, 60, size=(1,))[0]):
+        pyboy.tick()
+
+    for _ in range(3):
+        pyboy.send_input(WindowEvent.PRESS_BUTTON_START)
+        pyboy.tick()
+        pyboy.send_input(WindowEvent.RELEASE_BUTTON_START)
+
+        for _ in range(6):
+            pyboy.tick()
 
 
 def eval_genome(genome, config):
     global max_fitness
 
-    pyboy = PyBoy('tetris_1.gb', window_type='quiet',
+    pyboy = PyBoy('tetris.gb', window_type='quiet',
                   game_wrapper=True)
     pyboy.set_emulation_speed(0)
-
     tetris = pyboy.game_wrapper()
-    tetris.start_game()
+    custom_start(pyboy)
 
     # Set block animation to fall instantly
-    pyboy.set_memory_value(0xff9a, 0)
+    pyboy.set_memory_value(0xff9a, 1)
 
     model = neat.nn.FeedForwardNetwork.create(genome, config)
-    block_pool = []
-    c_run = 0
-    child_fitnesses = []
+    child_fitness = 0
     action_count = 0
 
-    while c_run < run_per_child:
-        block_pool = [0, 4, 8, 12, 16, 20, 24] if len(block_pool) == 0 \
-            else block_pool
-        next_piece = np.random.choice(block_pool)
-        block_pool.remove(next_piece)
-        # Set the next piece to random
-        pyboy.set_memory_value(0xc213, next_piece)
-
+    while not pyboy.tick():
         # Beginning of action
-        best_action_score = -np.inf
+        best_action_score = np.NINF
         best_action = {'Turn': 0, 'Left': 0, 'Right': 0}
         begin_state = io.BytesIO()
         begin_state.seek(0)
-        beginning = pyboy.save_state(begin_state)
+        pyboy.save_state(begin_state)
 
         # Determine how many possible rotations
         # we need to check for the block
@@ -65,7 +77,7 @@ def eval_genome(genome, config):
         for move_dir in do_action('Middle', n_dir=1,
                                   n_turn=turns_needed, pyboy=pyboy):
             score = get_score(tetris.game_area(), model,
-                              pyboy)
+                              pyboy, neat=True)
             if score is not None and score > best_action_score:
                 best_action_score = score
                 best_action = {'Turn': move_dir['Turn'],
@@ -78,7 +90,7 @@ def eval_genome(genome, config):
         for move_dir in do_action('Left', n_dir=lefts_needed,
                                   n_turn=turns_needed, pyboy=pyboy):
             score = get_score(tetris.game_area(), model,
-                              pyboy)
+                              pyboy, neat=True)
             if score is not None and score > best_action_score:
                 best_action_score = score
                 best_action = {'Turn': move_dir['Turn'],
@@ -91,7 +103,7 @@ def eval_genome(genome, config):
         for move_dir in do_action('Right', n_dir=rights_needed,
                                   n_turn=turns_needed, pyboy=pyboy):
             score = get_score(tetris.game_area(), model,
-                              pyboy)
+                              pyboy, neat=True)
             if score is not None and score > best_action_score:
                 best_action_score = score
                 best_action = {'Turn': move_dir['Turn'],
@@ -110,28 +122,24 @@ def eval_genome(genome, config):
         drop_down(pyboy)
         pyboy.tick()
         action_count += 1
-        best_action_score = -np.inf
 
         # Game over:
-        if pyboy.get_memory_value(0xffe1) == 13 or action_count > 500:
-            # Giving more weights to lines score
-            run_fitness = pyboy.get_memory_value(0xff9e) + 1
-            child_fitnesses.append(run_fitness)
-            # print("Iteration %s - child %s - run %s" %
-            #       (epoch, child, c_run))
-            # print("Fitness: %s" % child_fitnesses)
-            c_run += 1
-            tetris.reset_game()
+        if pyboy.get_memory_value(0xffe1) == 13 or \
+                tetris.score == max_score:
+            child_fitness = tetris.score
+            if tetris.score == max_score:
+                print("Max score reached")
+            break
 
-    fitness = np.mean(child_fitnesses)
     # Dump best model
-    if fitness > max_fitness:
-        max_fitness = fitness
+    if child_fitness > max_fitness:
+        max_fitness = child_fitness
         file_name = str(np.round(max_fitness, 2))
-        if fitness > 100:
+        if tetris.level >= 20:
             with open('neat_models/%s' % file_name, 'wb') as f:
                 pickle.dump(model, f)
-    return fitness
+    pyboy.stop()
+    return child_fitness
 
 
 def run(config_path):
@@ -139,16 +147,16 @@ def run(config_path):
                                 neat.DefaultSpeciesSet, neat.DefaultStagnation,
                                 config_path)
 
-    p = neat.Checkpointer().restore_checkpoint('checkpoint/neat-checkpoint-22')
+    # p = neat.Population(config)
+    p = neat.Checkpointer().restore_checkpoint('checkpoint/neat-checkpoint-8')
     p.add_reporter(neat.StdOutReporter(True))
     stats = neat.StatisticsReporter()
     p.add_reporter(stats)
     p.add_reporter(
         neat.Checkpointer(1, filename_prefix='checkpoint/neat-checkpoint-'))
 
-    pe = neat.ParallelEvaluator(int(multiprocessing.cpu_count() / 2),
-                                eval_genome)
-    winner = p.run(pe.evaluate, 18)
+    pe = neat.ParallelEvaluator(n_workers, eval_genome)
+    winner = p.run(pe.evaluate, 20)
 
     # show final stats
     print('\nBest genome:\n{!s}'.format(winner))

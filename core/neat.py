@@ -14,5 +14,5 @@ def get_score(area, model, pyboy):
     except Exception as e:
         print(e)
         return None
-    print(inputs)
+
     return model.activate(inputs)[0]
