@@ -49,9 +49,8 @@ def get_board_info(area, pyboy, concat=True):
     holes = get_holes(peaks, area)
     n_holes = np.sum(holes)
 
-    # Height differences between consecutive cols
-    height_diffs = get_height_diffs(peaks)
-    bumpiness = np.sum(height_diffs)
+    # Abs height differences between consecutive cols
+    bumpiness = get_bumpiness(peaks)
 
     if not concat:
         return agg_height, n_holes, bumpiness
@@ -81,15 +80,12 @@ def get_board_info_for_neat(area, concat=True):
     n_holes = np.sum(holes)
     n_col_with_holes = np.count_nonzero(holes)
 
-    # Height differences between consecutive cols
-    height_diffs = get_height_diffs(peaks)
-    # min_cons_height_diff = np.min(height_diffs)
-    # max_cons_height_diff = np.max(height_diffs)
-    bumpiness = np.sum(height_diffs)
+    # Abs height differences between consecutive cols
+    bumpiness = get_bumpiness(peaks)
 
     # Mean and median heights
-    # mean_height = np.mean(peaks)
-    # median_height = np.median(peaks)
+    mean_height = np.mean(peaks)
+    median_height = np.median(peaks)
 
     num_pieces = np.count_nonzero(area)
     # Number of cols with zero blocks
@@ -99,29 +95,20 @@ def get_board_info_for_neat(area, concat=True):
     # e_lines = np.count_nonzero(np.all(area == np.ones(10), axis=1))
 
     # Total sum of weighted blocks, the higher the block the higher the score
-    # sum_weighted = np.sum((area.T * np.arange(area.shape[0], 0, -1)).T)
+    sum_weighted = np.sum((area.T * np.arange(area.shape[0], 0, -1)).T)
     # sum_weighted = np.interp(sum_weighted, (0, 1710), (0, 10))
-    #
-    # # Total score gained from clearing lines
-    # full_rows = np.where(np.all(area == np.ones(10), axis=1))[0]
-    # if full_rows.size != 0:
-    #     weighted_score_gain = np.sum((area.shape[0] - full_rows) *
-    #                                  area.shape[0])
-    # else:
-    #     weighted_score_gain = 0
-    # weighted_score_gain = np.interp(weighted_score_gain, (0, 660), (0, 10))
 
     if not concat:
         return agg_height, n_holes, bumpiness, shortest, tallest, \
                max_height_diff, max_col_holes, n_col_with_holes, num_pieces, \
-               num_pits
+               num_pits, mean_height, median_height, sum_weighted
     return \
         np.array([agg_height, n_holes, bumpiness, shortest, tallest, \
                   max_height_diff, max_col_holes, n_col_with_holes, num_pieces, \
-                  num_pits])
+                  num_pits, mean_height, median_height, sum_weighted])
 
 
-def get_height_diffs(peaks):
+def get_bumpiness(peaks):
     s = 0
     for i in range(9):
         s += np.abs(peaks[i] - peaks[i + 1])
