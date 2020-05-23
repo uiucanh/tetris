@@ -12,35 +12,12 @@ from multiprocessing import cpu_count
 from pyboy import PyBoy, WindowEvent
 
 
-epochs = 10
+epochs = 20
 max_fitness = 0
 blank_tile = 47
 pop_size = 50
-max_action_count = 1000
 max_score = 999999
-n_workers = int(cpu_count() / 2)
-
-
-def custom_start(pyboy):
-    # This replaces pyboy start function to get some randomness
-    while True:
-        pyboy.tick()
-        pyboy.botsupport_manager().tilemap_background().refresh_lcdc()
-        if pyboy.botsupport_manager().tilemap_background()[2:9, 14] == \
-                [89, 25, 21, 10, 34, 14, 27]:
-            break
-
-    np.random.seed()
-    for _ in range(np.random.randint(1, 60, size=(1,))[0]):
-        pyboy.tick()
-
-    for _ in range(3):
-        pyboy.send_input(WindowEvent.PRESS_BUTTON_START)
-        pyboy.tick()
-        pyboy.send_input(WindowEvent.RELEASE_BUTTON_START)
-
-        for _ in range(6):
-            pyboy.tick()
+n_workers = 10
 
 
 def eval_genome(genome, config):
@@ -50,14 +27,13 @@ def eval_genome(genome, config):
                   game_wrapper=True)
     pyboy.set_emulation_speed(0)
     tetris = pyboy.game_wrapper()
-    custom_start(pyboy)
+    tetris.start_game()
 
     # Set block animation to fall instantly
     pyboy.set_memory_value(0xff9a, 1)
 
     model = neat.nn.FeedForwardNetwork.create(genome, config)
     child_fitness = 0
-    action_count = 0
 
     while not pyboy.tick():
         # Beginning of action
@@ -121,7 +97,6 @@ def eval_genome(genome, config):
             do_sideway(pyboy, 'Right')
         drop_down(pyboy)
         pyboy.tick()
-        action_count += 1
 
         # Game over:
         if pyboy.get_memory_value(0xffe1) == 13 or \
@@ -147,8 +122,8 @@ def run(config_path):
                                 neat.DefaultSpeciesSet, neat.DefaultStagnation,
                                 config_path)
 
-    # p = neat.Population(config)
-    p = neat.Checkpointer().restore_checkpoint('checkpoint/neat-checkpoint-8')
+    p = neat.Population(config)
+    # p = neat.Checkpointer().restore_checkpoint('checkpoint/neat-checkpoint-8')
     p.add_reporter(neat.StdOutReporter(True))
     stats = neat.StatisticsReporter()
     p.add_reporter(stats)
@@ -156,7 +131,7 @@ def run(config_path):
         neat.Checkpointer(1, filename_prefix='checkpoint/neat-checkpoint-'))
 
     pe = neat.ParallelEvaluator(n_workers, eval_genome)
-    winner = p.run(pe.evaluate, 20)
+    winner = p.run(pe.evaluate, epochs)
 
     # show final stats
     print('\nBest genome:\n{!s}'.format(winner))
@@ -166,7 +141,9 @@ def run(config_path):
     node_names = {-1: 'agg_height', -2: 'n_holes', -3: 'bumpiness',
                   -4: 'shortest', -5: 'tallest', -6: 'max_height_diff',
                   -7: 'max_col_holes', -8: 'n_col_with_holes',
-                  -9: 'num_pieces', -10: 'num_pits',
+                  -9: 'num_pieces', -10: 'num_pits', -11: 'mean_height',
+                  -12: 'median_height', -13: 'sum_weighted',
+                  -14: 'max_wells', -15: 'sum_wells',
                   0: 'Score'}
     visualize.draw_net(config, winner, True, node_names=node_names)
     visualize.plot_stats(stats, ylog=False, view=True)

@@ -32,7 +32,7 @@ def get_current_block_text(block_tile):
         return 'T'
 
 
-def get_board_info(area, pyboy, concat=True):
+def get_board_info(area, concat=True):
     # Num of rows - first occurrence of 1
     peaks = np.array([])
     for col in range(area.shape[1]):
@@ -52,10 +52,14 @@ def get_board_info(area, pyboy, concat=True):
     # Abs height differences between consecutive cols
     bumpiness = get_bumpiness(peaks)
 
+    wells = get_wells(peaks)
+    max_wells = np.max(wells)
+    sum_wells = np.sum(wells)
+
     if not concat:
-        return agg_height, n_holes, bumpiness
+        return agg_height, n_holes, bumpiness, max_wells, sum_wells
     return \
-        np.array([agg_height, n_holes, bumpiness])
+        np.array([agg_height, n_holes, bumpiness, max_wells, sum_wells])
 
 
 def get_board_info_for_neat(area, concat=True):
@@ -97,15 +101,21 @@ def get_board_info_for_neat(area, concat=True):
     # Total sum of weighted blocks, the higher the block the higher the score
     sum_weighted = np.sum((area.T * np.arange(area.shape[0], 0, -1)).T)
     # sum_weighted = np.interp(sum_weighted, (0, 1710), (0, 10))
-
+    
+    wells = get_wells(peaks)
+    max_wells = np.max(wells)
+    sum_wells = np.sum(wells)
+    
     if not concat:
         return agg_height, n_holes, bumpiness, shortest, tallest, \
                max_height_diff, max_col_holes, n_col_with_holes, num_pieces, \
-               num_pits, mean_height, median_height, sum_weighted
+               num_pits, mean_height, median_height, sum_weighted, \
+               max_wells, sum_wells
     return \
-        np.array([agg_height, n_holes, bumpiness, shortest, tallest, \
-                  max_height_diff, max_col_holes, n_col_with_holes, num_pieces, \
-                  num_pits, mean_height, median_height, sum_weighted])
+        np.array([agg_height, n_holes, bumpiness, shortest, tallest,
+                  max_height_diff, max_col_holes, n_col_with_holes, num_pieces,
+                  num_pits, mean_height, median_height, sum_weighted,
+                  max_wells, sum_wells])
 
 
 def get_bumpiness(peaks):
@@ -161,6 +171,27 @@ def check_needed_turn(block_tile):
     if block == 'O':
         return 1
     return 4
+
+
+def get_wells(peaks):
+    wells = []
+    for i in range(len(peaks)):
+        if i == 0:
+            w = peaks[1] - peaks[0]
+            w = w if w > 0 else 0
+            wells.append(w)
+        elif i == len(peaks) - 1:
+            w = peaks[-2] - peaks[-1]
+            w = w if w > 0 else 0
+            wells.append(w)
+        else:
+            w1 = peaks[i - 1] - peaks[i]
+            w2 = peaks[i + 1] - peaks[i]
+            w1 = w1 if w1 > 0 else 0
+            w2 = w2 if w2 > 0 else 0
+            w = w1 if w1 >= w2 else w2
+            wells.append(w)
+    return wells
 
 
 def check_needed_dirs(block_tile):

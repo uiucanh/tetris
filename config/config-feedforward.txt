@@ -45,8 +45,8 @@ node_add_prob           = 0.3
 node_delete_prob        = 0.3
 
 # network parameters
-num_hidden              = 10
-num_inputs              = 10
+num_hidden              = 0
+num_inputs              = 15
 num_outputs             = 1
 
 # node response options

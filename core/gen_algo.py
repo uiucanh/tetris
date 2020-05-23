@@ -3,8 +3,8 @@ import torch
 import torch.nn as nn
 from core.utils import get_board_info, get_board_info_for_neat
 
-input_size = 3
-hidden_size = 3
+input_size = 5
+hidden_size = 5
 output_size = 1
 
 elitism_pct = 0.2
@@ -60,7 +60,7 @@ class Population:
     def crossover(self):
         print("Crossver")
         # Squaring all fitnesses
-        self.old_fitnesses = np.square(self.old_fitnesses)
+        # self.old_fitnesses = np.square(self.old_fitnesses)
         sum_fitnesses = np.sum(self.old_fitnesses)
         probs = [self.old_fitnesses[i] / sum_fitnesses for i in
                  range(self.size)]
