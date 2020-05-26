@@ -1,9 +1,11 @@
 import sys
 import io
 import pickle
+import numpy as np
 
-from core.utils import *
-from core.gen_algo import *
+from core.utils import check_needed_dirs, check_needed_turn, do_action, \
+    do_turn, do_sideway, drop_down
+from core.gen_algo import get_score
 from pyboy import PyBoy
 
 max_fitness = 0
@@ -12,7 +14,7 @@ epoch = 0
 pop_size = 50
 
 quiet = "--quiet" in sys.argv
-pyboy = PyBoy('tetris.gb', game_wrapper=True,
+pyboy = PyBoy('tetris_1.1.gb', game_wrapper=True,
               window_type="headless" if quiet else "SDL2")
 pyboy.set_emulation_speed(0)
 
@@ -21,7 +23,7 @@ tetris.start_game()
 
 # Set block animation to fall instantly
 pyboy.set_memory_value(0xff9a, 1)
-with open('neat_models/746927', 'rb') as f:
+with open('neat_models/211192', 'rb') as f:
     model = pickle.load(f)
 block_pool = []
 
@@ -89,5 +91,6 @@ while not pyboy.tick():
 
     # Game over:
     if pyboy.get_memory_value(0xffe1) == 13:
+        print(tetris.score)
         input()
         tetris.reset_game()

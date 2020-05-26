@@ -123,7 +123,7 @@ class Population:
                         model.output.weight.data[i].add_(noise)
 
 
-def get_score(area, model, pyboy, neat=False):
+def get_score(area, model, tetris, s_lines, neat=False):
     area = np.asarray(area)
 
     # Convert blank areas into 0 and block into 1
@@ -133,7 +133,7 @@ def get_score(area, model, pyboy, neat=False):
         if neat:
             inputs = get_board_info_for_neat(area, concat=False)
         else:
-            inputs = get_board_info(area, pyboy)
+            inputs = get_board_info(area, tetris, s_lines)
     except Exception as e:
         print(e)
         return None

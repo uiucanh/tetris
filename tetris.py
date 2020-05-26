@@ -1,8 +1,10 @@
 import io
+import pickle
 
 from datetime import datetime
-from core.utils import *
-from core.gen_algo import *
+from core.gen_algo import get_score
+from core.utils import check_needed_turn, do_action, drop_down, \
+    do_sideway, do_turn, check_needed_dirs
 from pyboy import PyBoy
 from multiprocessing import Pool, cpu_count
 
@@ -16,7 +18,7 @@ n_workers = int(10)
 
 
 def eval_genome(epoch, child_index, child_model):
-    pyboy = PyBoy('tetris.gb', game_wrapper=True, window_type="headless")
+    pyboy = PyBoy('tetris_1.1.gb', game_wrapper=True, window_type="headless")
     pyboy.set_emulation_speed(0)
     tetris = pyboy.game_wrapper()
     tetris.start_game()
@@ -31,6 +33,7 @@ def eval_genome(epoch, child_index, child_model):
         begin_state = io.BytesIO()
         begin_state.seek(0)
         pyboy.save_state(begin_state)
+        s_lines = tetris.lines
 
         # Determine how many possible rotations we need to check for the block
         block_tile = pyboy.get_memory_value(0xc203)
@@ -41,7 +44,7 @@ def eval_genome(epoch, child_index, child_model):
         for move_dir in do_action('Middle', pyboy, n_dir=1,
                                   n_turn=turns_needed):
             score = get_score(tetris.game_area(), child_model,
-                              pyboy)
+                              tetris, s_lines)
             if score is not None and score >= best_action_score:
                 best_action_score = score
                 best_action = {'Turn': move_dir['Turn'],
@@ -54,7 +57,7 @@ def eval_genome(epoch, child_index, child_model):
         for move_dir in do_action('Left', pyboy, n_dir=lefts_needed,
                                   n_turn=turns_needed):
             score = get_score(tetris.game_area(), child_model,
-                              pyboy)
+                              tetris, s_lines)
             if score is not None and score >= best_action_score:
                 best_action_score = score
                 best_action = {'Turn': move_dir['Turn'],
@@ -67,7 +70,7 @@ def eval_genome(epoch, child_index, child_model):
         for move_dir in do_action('Right', pyboy, n_dir=rights_needed,
                                   n_turn=turns_needed):
             score = get_score(tetris.game_area(), child_model,
-                              pyboy)
+                              tetris, s_lines)
             if score is not None and score >= best_action_score:
                 best_action_score = score
                 best_action = {'Turn': move_dir['Turn'],
@@ -125,6 +128,8 @@ for e in range(epochs):
     print("Time took", datetime.now() - start_time)
     print("Best child hidden weights:")
     print(population.models[np.argmax(population.fitnesses)].hidden.weight)
+    with open('checkpoint/checkpoint-%s.pkl' % e) as f:
+        pickle.dump(population, f)
 
     if np.max(population.fitnesses) > max_fitness:
         max_fitness = np.max(population.fitnesses)

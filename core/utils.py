@@ -32,7 +32,7 @@ def get_current_block_text(block_tile):
         return 'T'
 
 
-def get_board_info(area, concat=True):
+def get_board_info(area, tetris, s_lines, concat=True):
     # Num of rows - first occurrence of 1
     peaks = np.array([])
     for col in range(area.shape[1]):
@@ -52,14 +52,12 @@ def get_board_info(area, concat=True):
     # Abs height differences between consecutive cols
     bumpiness = get_bumpiness(peaks)
 
-    wells = get_wells(peaks)
-    max_wells = np.max(wells)
-    sum_wells = np.sum(wells)
+    cleared = tetris.lines - s_lines
 
     if not concat:
-        return agg_height, n_holes, bumpiness, max_wells, sum_wells
+        return agg_height, n_holes, bumpiness, cleared
     return \
-        np.array([agg_height, n_holes, bumpiness, max_wells, sum_wells])
+        np.array([agg_height, n_holes, bumpiness, cleared])
 
 
 def get_board_info_for_neat(area, concat=True):
@@ -101,11 +99,11 @@ def get_board_info_for_neat(area, concat=True):
     # Total sum of weighted blocks, the higher the block the higher the score
     sum_weighted = np.sum((area.T * np.arange(area.shape[0], 0, -1)).T)
     # sum_weighted = np.interp(sum_weighted, (0, 1710), (0, 10))
-    
+
     wells = get_wells(peaks)
     max_wells = np.max(wells)
     sum_wells = np.sum(wells)
-    
+
     if not concat:
         return agg_height, n_holes, bumpiness, shortest, tallest, \
                max_height_diff, max_col_holes, n_col_with_holes, num_pieces, \

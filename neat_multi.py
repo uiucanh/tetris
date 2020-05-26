@@ -23,7 +23,7 @@ n_workers = 10
 def eval_genome(genome, config):
     global max_fitness
 
-    pyboy = PyBoy('tetris.gb', window_type='quiet',
+    pyboy = PyBoy('tetris_1.1.gb', window_type='quiet',
                   game_wrapper=True)
     pyboy.set_emulation_speed(0)
     tetris = pyboy.game_wrapper()
@@ -122,8 +122,8 @@ def run(config_path):
                                 neat.DefaultSpeciesSet, neat.DefaultStagnation,
                                 config_path)
 
-    p = neat.Population(config)
-    # p = neat.Checkpointer().restore_checkpoint('checkpoint/neat-checkpoint-8')
+    # p = neat.Population(config)
+    p = neat.Checkpointer().restore_checkpoint('checkpoint/neat-checkpoint-24')
     p.add_reporter(neat.StdOutReporter(True))
     stats = neat.StatisticsReporter()
     p.add_reporter(stats)
