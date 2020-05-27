@@ -16,7 +16,7 @@ max_fitness = 0
 blank_tile = 47
 pop_size = 50
 max_score = 999999
-n_workers = int(10)
+n_workers = int(8)
 
 
 def eval_genome(epoch, child_index, child_model):
@@ -106,7 +106,7 @@ def eval_genome(epoch, child_index, child_model):
             return child_fitness
 
 
-e = 5
+e = 6
 while e < epochs:
     start_time = datetime.now()
     if population is None:
