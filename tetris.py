@@ -1,8 +1,10 @@
 import io
 import pickle
+import numpy as np
+import torch
 
 from datetime import datetime
-from core.gen_algo import get_score
+from core.gen_algo import get_score, Population
 from core.utils import check_needed_turn, do_action, drop_down, \
     do_sideway, do_turn, check_needed_dirs
 from pyboy import PyBoy
@@ -24,7 +26,7 @@ def eval_genome(epoch, child_index, child_model):
     tetris.start_game()
 
     # Set block animation to fall instantly
-    pyboy.set_memory_value(0xff9a, 1)
+    pyboy.set_memory_value(0xff9a, 2)
 
     while not pyboy.tick():
         # Beginning of action
@@ -104,10 +106,13 @@ def eval_genome(epoch, child_index, child_model):
             return child_fitness
 
 
-for e in range(epochs):
+e = 5
+while e < epochs:
     start_time = datetime.now()
     if population is None:
-        population = Population(size=pop_size)
+        # population = Population(size=pop_size)
+        with open('checkpoint/checkpoint-%s.pkl' % (e - 1), 'rb') as f:
+            population = pickle.load(f)
     else:
         population = Population(size=pop_size, old_population=population)
 
@@ -119,7 +124,7 @@ for e in range(epochs):
     for i in range(pop_size):
         population.fitnesses[i] = result[i].get()
 
-    print("Iteration %s fitnesses %s" % (e, np.round(population.fitnesses,2)))
+    print("Iteration %s fitnesses %s" % (e, np.round(population.fitnesses, 2)))
     print(
         "Iteration %s max fitness %s " % (e, np.max(population.fitnesses)))
     print(
@@ -127,8 +132,8 @@ for e in range(epochs):
             population.fitnesses)))
     print("Time took", datetime.now() - start_time)
     print("Best child hidden weights:")
-    print(population.models[np.argmax(population.fitnesses)].hidden.weight)
-    with open('checkpoint/checkpoint-%s.pkl' % e) as f:
+    print(population.models[np.argmax(population.fitnesses)].hidden.weight.T)
+    with open('checkpoint/checkpoint-%s.pkl' % e, 'wb') as f:
         pickle.dump(population, f)
 
     if np.max(population.fitnesses) > max_fitness:

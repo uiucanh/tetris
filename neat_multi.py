@@ -99,8 +99,7 @@ def eval_genome(genome, config):
         pyboy.tick()
 
         # Game over:
-        if pyboy.get_memory_value(0xffe1) == 13 or \
-                tetris.score == max_score:
+        if tetris.game_over() or tetris.score == max_score:
             child_fitness = tetris.score
             if tetris.score == max_score:
                 print("Max score reached")

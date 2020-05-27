@@ -3,12 +3,12 @@ import torch
 import torch.nn as nn
 from core.utils import get_board_info, get_board_info_for_neat
 
-input_size = 5
-hidden_size = 5
+input_size = 4
+hidden_size = 1
 output_size = 1
 
 elitism_pct = 0.2
-mutation_prob = 0.1
+mutation_prob = 0.5
 weights_init_min = -1
 weights_init_max = 1
 weights_mutate_power = 0.5
