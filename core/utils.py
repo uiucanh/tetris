@@ -10,8 +10,6 @@ action_map = {
     'A': [WindowEvent.PRESS_BUTTON_A, WindowEvent.RELEASE_BUTTON_A]
 }
 
-# Define some variables
-blank_tile = 47
 start_y = 24
 
 
@@ -32,88 +30,73 @@ def get_current_block_text(block_tile):
         return 'T'
 
 
-def get_board_info(area, tetris, s_lines, concat=True):
+def get_board_info(area, tetris, s_lines):
     # Num of rows - first occurrence of 1
-    peaks = np.array([])
-    for col in range(area.shape[1]):
-        if 1 in area[:, col]:
-            p = area.shape[0] - np.argmax(area[:, col], axis=0)
-            peaks = np.append(peaks, p)
-        else:
-            peaks = np.append(peaks, 0)
+    peaks = get_peaks(area)
+    highest_peak = np.max(peaks)
 
-    # Shortest and tallest col
+    # Aggregated height
     agg_height = np.sum(peaks)
 
-    # Number of empty holes
     holes = get_holes(peaks, area)
+    # Number of empty holes
     n_holes = np.sum(holes)
+    # Number of columns with at least one hole
+    n_cols_with_holes = np.count_nonzero(np.array(holes) > 0)
+
+    # Row transitions
+    row_transitions = get_row_transition(area, highest_peak)
+
+    # Columns transitions
+    col_transitions = get_col_transition(area, peaks)
 
     # Abs height differences between consecutive cols
     bumpiness = get_bumpiness(peaks)
 
-    cleared = tetris.lines - s_lines
-
-    if not concat:
-        return agg_height, n_holes, bumpiness, cleared
-    return \
-        np.array([agg_height, n_holes, bumpiness, cleared])
-
-
-def get_board_info_for_neat(area, concat=True):
-    # Num of rows - first occurrence of 1
-    peaks = np.array([])
-    for col in range(area.shape[1]):
-        if 1 in area[:, col]:
-            p = area.shape[0] - np.argmax(area[:, col], axis=0)
-            peaks = np.append(peaks, p)
-        else:
-            peaks = np.append(peaks, 0)
-
-    # Shortest and tallest col
-    agg_height = np.sum(peaks)
-    shortest = np.min(peaks)
-    tallest = np.max(peaks)
-    max_height_diff = tallest - shortest
-
-    # Number of empty holes
-    holes = get_holes(peaks, area)
-    max_col_holes = np.max(holes)
-    n_holes = np.sum(holes)
-    n_col_with_holes = np.count_nonzero(holes)
-
-    # Abs height differences between consecutive cols
-    bumpiness = get_bumpiness(peaks)
-
-    # Mean and median heights
-    mean_height = np.mean(peaks)
-    median_height = np.median(peaks)
-
-    num_pieces = np.count_nonzero(area)
     # Number of cols with zero blocks
     num_pits = np.count_nonzero(np.count_nonzero(area, axis=0) == 0)
 
-    # t_lines_cleared = pyboy.get_memory_value(0xff9e)
-    # e_lines = np.count_nonzero(np.all(area == np.ones(10), axis=1))
-
-    # Total sum of weighted blocks, the higher the block the higher the score
-    sum_weighted = np.sum((area.T * np.arange(area.shape[0], 0, -1)).T)
-    # sum_weighted = np.interp(sum_weighted, (0, 1710), (0, 10))
-
     wells = get_wells(peaks)
+    # Deepest well
     max_wells = np.max(wells)
-    sum_wells = np.sum(wells)
 
-    if not concat:
-        return agg_height, n_holes, bumpiness, shortest, tallest, \
-               max_height_diff, max_col_holes, n_col_with_holes, num_pieces, \
-               num_pits, mean_height, median_height, sum_weighted, \
-               max_wells, sum_wells
-    return \
-        np.array([agg_height, n_holes, bumpiness, shortest, tallest,
-                  max_height_diff, max_col_holes, n_col_with_holes, num_pieces,
-                  num_pits, mean_height, median_height, sum_weighted,
-                  max_wells, sum_wells])
+    # The number of lines gained with the move
+    cleared = (tetris.lines - s_lines) * 8
+
+    return agg_height, n_holes, bumpiness, cleared, num_pits, max_wells, \
+        n_cols_with_holes, row_transitions, col_transitions
+
+
+def get_peaks(area):
+    peaks = np.array([])
+    for col in range(area.shape[1]):
+        if 1 in area[:, col]:
+            p = area.shape[0] - np.argmax(area[:, col], axis=0)
+            peaks = np.append(peaks, p)
+        else:
+            peaks = np.append(peaks, 0)
+    return peaks
+
+
+def get_row_transition(area, highest_peak):
+    sum = 0
+    # From highest peak to bottom
+    for row in range(int(area.shape[0] - highest_peak), area.shape[0]):
+        for col in range(1, area.shape[1]):
+            if area[row, col] != area[row, col - 1]:
+                sum += 1
+    return sum
+
+
+def get_col_transition(area, peaks):
+    sum = 0
+    for col in range(area.shape[1]):
+        if peaks[col] <= 1:
+            continue
+        for row in range(int(area.shape[0] - peaks[col]), area.shape[0] - 1):
+            if area[row, col] != area[row + 1, col]:
+                sum += 1
+    return sum
 
 
 def get_bumpiness(peaks):
@@ -121,14 +104,6 @@ def get_bumpiness(peaks):
     for i in range(9):
         s += np.abs(peaks[i] - peaks[i + 1])
     return s
-
-
-def get_num_pieces_on_board(area, blank_row):
-    c = []
-    for col in range(area.shape[1]):
-        c.append(np.count_nonzero(area[blank_row:, col]))
-
-    return np.array(c)
 
 
 def get_holes(peaks, area):
@@ -142,33 +117,6 @@ def get_holes(peaks, area):
         else:
             holes.append(np.count_nonzero(area[int(start):, col] == 0))
     return holes
-
-
-def get_min_max_col_height(board_height, blank_row, col_peaks):
-    tallest = board_height - blank_row - 1
-    shortest = np.min(col_peaks)
-
-    return shortest, tallest
-
-
-def count_max_consecutive_0(last_row):
-    mask = np.concatenate(([False], last_row == 0, [False]))
-    if ~mask.any():
-        return 0
-    else:
-        c = np.flatnonzero(mask[1:] < mask[:-1]) - \
-            np.flatnonzero(mask[1:] > mask[:-1])
-        return c.max()
-
-
-def check_needed_turn(block_tile):
-    # Get the text representation of the block
-    block = get_current_block_text(block_tile)
-    if block == 'I' or block == 'S' or block == 'Z':
-        return 2
-    if block == 'O':
-        return 1
-    return 4
 
 
 def get_wells(peaks):
@@ -190,6 +138,16 @@ def get_wells(peaks):
             w = w1 if w1 >= w2 else w2
             wells.append(w)
     return wells
+
+
+def check_needed_turn(block_tile):
+    # Get the text representation of the block
+    block = get_current_block_text(block_tile)
+    if block == 'I' or block == 'S' or block == 'Z':
+        return 2
+    if block == 'O':
+        return 1
+    return 4
 
 
 def check_needed_dirs(block_tile):

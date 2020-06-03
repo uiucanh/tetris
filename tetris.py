@@ -8,15 +8,17 @@ from core.gen_algo import get_score, Population
 from core.utils import check_needed_turn, do_action, drop_down, \
     do_sideway, do_turn, check_needed_dirs
 from pyboy import PyBoy
-from multiprocessing import Pool, cpu_count
+from multiprocessing import Pool
 
-epochs = 25
+
+epochs = 30
 population = None
+run_per_child = 1
 max_fitness = 0
 blank_tile = 47
-pop_size = 50
+pop_size = 30
 max_score = 999999
-n_workers = int(8)
+n_workers = 10
 
 
 def eval_genome(epoch, child_index, child_model):
@@ -28,7 +30,12 @@ def eval_genome(epoch, child_index, child_model):
     # Set block animation to fall instantly
     pyboy.set_memory_value(0xff9a, 2)
 
-    while not pyboy.tick():
+    run = 0
+    scores = []
+    levels = []
+    lines = []
+
+    while run < run_per_child:
         # Beginning of action
         best_action_score = np.NINF
         best_action = {'Turn': 0, 'Left': 0, 'Right': 0}
@@ -93,54 +100,72 @@ def eval_genome(epoch, child_index, child_model):
 
         # Game over:
         if tetris.game_over() or tetris.score == max_score:
-            child_fitness = tetris.score
-            print("-" * 20)
-            print("Iteration %s - child %s" % (epoch, child_index))
-            if tetris.score == max_score:
-                print("Max score reached")
-            print("Score: %s, Level: %s, Lines %s" %
-                  (tetris.score, tetris.level, tetris.lines))
-            print("Fitness: %s" % child_fitness)
-            pyboy.stop()
+            scores.append(tetris.score)
+            levels.append(tetris.level)
+            lines.append(tetris.lines)
+            if run == run_per_child - 1:
+                pyboy.stop()
+            else:
+                tetris.reset_game()
+            run += 1
 
-            return child_fitness
+    child_fitness = np.average(scores)
+    print("-" * 20)
+    print("Iteration %s - child %s" % (epoch, child_index))
+    print("Score: %s, Level: %s, Lines %s" %
+          (scores, levels, lines))
+    print("Fitness: %s" % child_fitness)
+    print("Output weight:")
+    print(child_model.output.weight.data)
+
+    return child_fitness
 
 
-e = 6
-while e < epochs:
-    start_time = datetime.now()
-    if population is None:
-        # population = Population(size=pop_size)
-        with open('checkpoint/checkpoint-%s.pkl' % (e - 1), 'rb') as f:
-            population = pickle.load(f)
-    else:
-        population = Population(size=pop_size, old_population=population)
+if __name__ == '__main__':
+    e = 0
+    while e < epochs:
+        start_time = datetime.now()
+        if population is None:
+            if e == 0:
+                population = Population(size=pop_size)
+            else:
+                with open('checkpoint/checkpoint-%s.pkl' % (e - 1), 'rb') as f:
+                    population = pickle.load(f)
+        else:
+            population = Population(size=pop_size, old_population=population)
 
-    p = Pool(n_workers)
-    result = []
-    for i in range(pop_size):
-        result.append(p.apply_async(eval_genome, (e, i, population.models[i])))
+        p = Pool(n_workers)
+        result = [0] * pop_size
+        for i in range(pop_size):
+            result[i] = p.apply_async(
+                eval_genome, (e, i, population.models[i]))
 
-    for i in range(pop_size):
-        population.fitnesses[i] = result[i].get()
+        for i in range(pop_size):
+            population.fitnesses[i] = result[i].get()
 
-    print("Iteration %s fitnesses %s" % (e, np.round(population.fitnesses, 2)))
-    print(
-        "Iteration %s max fitness %s " % (e, np.max(population.fitnesses)))
-    print(
-        "Iteration %s mean fitness %s " % (e, np.mean(
-            population.fitnesses)))
-    print("Time took", datetime.now() - start_time)
-    print("Best child hidden weights:")
-    print(population.models[np.argmax(population.fitnesses)].hidden.weight.T)
-    with open('checkpoint/checkpoint-%s.pkl' % e, 'wb') as f:
-        pickle.dump(population, f)
+        print("-" * 20)
+        print("Iteration %s fitnesses %s" %
+              (e, np.round(population.fitnesses, 2)))
+        print(
+            "Iteration %s max fitness %s " % (e, np.max(population.fitnesses)))
+        print(
+            "Iteration %s mean fitness %s " % (e, np.mean(
+                population.fitnesses)))
+        print("Time took", datetime.now() - start_time)
+        print("Best child output weights:")
+        print(population.models[np.argmax(
+            population.fitnesses)].output.weight.T)
+        # Saving population
+        with open('checkpoint/checkpoint-%s.pkl' % e, 'wb') as f:
+            pickle.dump(population, f)
 
-    if np.max(population.fitnesses) > max_fitness:
-        max_fitness = np.max(population.fitnesses)
-        file_name = datetime.strftime(datetime.now(), '%d_%H_%M_') + str(
-            np.round(max_fitness, 2))
-        torch.save(
-            population.models[np.argmax(population.fitnesses)].state_dict(),
-            'models/%s' % file_name)
-    e += 1
+        if np.max(population.fitnesses) >= max_fitness:
+            max_fitness = np.max(population.fitnesses)
+            file_name = datetime.strftime(datetime.now(), '%d_%H_%M_') + str(
+                np.round(max_fitness, 2))
+            # Saving best model
+            torch.save(
+                population.models[np.argmax(
+                    population.fitnesses)].state_dict(),
+                'models/%s' % file_name)
+        e += 1

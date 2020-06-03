@@ -19,8 +19,8 @@ aggregation_options     = sum
 bias_init_mean          = 0.0
 bias_init_stdev         = 1.0
 bias_init_type          = uniform
-bias_max_value          = 30
-bias_min_value          = -30
+bias_max_value          = 1
+bias_min_value          = -1
 bias_mutate_power       = 0.5
 bias_mutate_rate        = 0.7
 bias_replace_rate       = 0.1
@@ -46,14 +46,14 @@ node_delete_prob        = 0.3
 
 # network parameters
 num_hidden              = 0
-num_inputs              = 15
+num_inputs              = 9
 num_outputs             = 1
 
 # node response options
 response_init_mean      = 1.0
 response_init_stdev     = 0.0
-response_max_value      = 30.0
-response_min_value      = -30.0
+response_max_value      = 1.0
+response_min_value      = -1.0
 response_mutate_power   = 0.0
 response_mutate_rate    = 0.0
 response_replace_rate   = 0.0
@@ -61,8 +61,8 @@ response_replace_rate   = 0.0
 # connection weight options
 weight_init_mean        = 0.0
 weight_init_stdev       = 1.0
-weight_max_value        = 30
-weight_min_value        = -30
+weight_max_value        = 1
+weight_min_value        = -1
 weight_mutate_power     = 0.5
 weight_mutate_rate      = 0.8
 weight_replace_rate     = 0.1
