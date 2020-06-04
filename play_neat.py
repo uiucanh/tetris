@@ -43,8 +43,7 @@ while n < n_plays:
     # Do middle
     for move_dir in do_action('Middle', pyboy, n_dir=1,
                               n_turn=turns_needed):
-        score = get_score(tetris.game_area(), model,
-                          tetris, s_lines, neat=True)
+        score = get_score(tetris, model, s_lines, neat=True)
         if score is not None and score > best_child_score:
             best_child_score = score
             best_action = {'Turn': move_dir['Turn'],
@@ -56,8 +55,7 @@ while n < n_plays:
     # Do left
     for move_dir in do_action('Left', pyboy, n_dir=lefts_needed,
                               n_turn=turns_needed):
-        score = get_score(tetris.game_area(), model,
-                          tetris, s_lines, neat=True)
+        score = get_score(tetris, model, s_lines, neat=True)
         if score is not None and score > best_child_score:
             best_child_score = score
             best_action = {'Turn': move_dir['Turn'],
@@ -69,8 +67,7 @@ while n < n_plays:
     # Do right
     for move_dir in do_action('Right', pyboy, n_dir=rights_needed,
                               n_turn=turns_needed):
-        score = get_score(tetris.game_area(), model,
-                          tetris, s_lines, neat=True)
+        score = get_score(tetris, model, s_lines, neat=True)
         if score is not None and score > best_child_score:
             best_child_score = score
             best_action = {'Turn': move_dir['Turn'],

@@ -12,6 +12,11 @@ action_map = {
 
 start_y = 24
 
+feature_names = [
+    'agg_height', 'n_holes', 'bumpiness', 'cleared', 'num_pits', 'max_wells',
+    'n_cols_with_holes', 'row_transitions', 'col_transitions'
+]
+
 
 def get_current_block_text(block_tile):
     if 0 <= block_tile <= 3:
@@ -31,7 +36,12 @@ def get_current_block_text(block_tile):
 
 
 def get_board_info(area, tetris, s_lines):
-    # Num of rows - first occurrence of 1
+    """
+    area: a numpy matrix representation of the board
+    tetris: game wrapper
+    s_lines: the starting number of cleared lines
+    """
+    # Columns heights
     peaks = get_peaks(area)
     highest_peak = np.max(peaks)
 
@@ -141,7 +151,7 @@ def get_wells(peaks):
 
 
 def check_needed_turn(block_tile):
-    # Get the text representation of the block
+    # Check how many turns we need to check for a block
     block = get_current_block_text(block_tile)
     if block == 'I' or block == 'S' or block == 'Z':
         return 2
@@ -151,7 +161,7 @@ def check_needed_turn(block_tile):
 
 
 def check_needed_dirs(block_tile):
-    # Return left, right maximum try needed
+    # Return left, right moves needed
     block = get_current_block_text(block_tile)
     if block == 'S' or block == 'Z':
         return 3, 5
@@ -161,9 +171,9 @@ def check_needed_dirs(block_tile):
 
 
 def do_turn(pyboy):
-    pyboy.send_input(WindowEvent.PRESS_BUTTON_A)
+    pyboy.send_input(action_map['A'][0])
     pyboy.tick()
-    pyboy.send_input(WindowEvent.RELEASE_BUTTON_A)
+    pyboy.send_input(action_map['A'][1])
     pyboy.tick()
 
 
@@ -175,15 +185,15 @@ def do_sideway(pyboy, action):
 
 
 def do_down(pyboy):
-    pyboy.send_input(WindowEvent.PRESS_ARROW_DOWN)
+    pyboy.send_input(action_map['Down'][0])
     pyboy.tick()
-    pyboy.send_input(WindowEvent.RELEASE_ARROW_DOWN)
+    pyboy.send_input(action_map['Down'][1])
 
 
 def drop_down(pyboy):
     # We continue moving down until can't anymore. This will cause
     # a new piece to spawn and have y_value of start_y.
-    # started_moving to prevent the loop not running at start.
+    # The bool started_moving is used to prevent the loop not running at start.
     started_moving = False
     while pyboy.get_memory_value(0xc201) != start_y or not started_moving:
         started_moving = True

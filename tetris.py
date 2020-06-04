@@ -6,16 +6,15 @@ import torch
 from datetime import datetime
 from core.gen_algo import get_score, Population
 from core.utils import check_needed_turn, do_action, drop_down, \
-    do_sideway, do_turn, check_needed_dirs
+    do_sideway, do_turn, check_needed_dirs, feature_names
 from pyboy import PyBoy
 from multiprocessing import Pool
 
 
-epochs = 30
+epochs = 25
 population = None
-run_per_child = 1
+run_per_child = 3
 max_fitness = 0
-blank_tile = 47
 pop_size = 30
 max_score = 999999
 n_workers = 10
@@ -42,6 +41,7 @@ def eval_genome(epoch, child_index, child_model):
         begin_state = io.BytesIO()
         begin_state.seek(0)
         pyboy.save_state(begin_state)
+        # Number of lines at the start
         s_lines = tetris.lines
 
         # Determine how many possible rotations we need to check for the block
@@ -52,8 +52,7 @@ def eval_genome(epoch, child_index, child_model):
         # Do middle
         for move_dir in do_action('Middle', pyboy, n_dir=1,
                                   n_turn=turns_needed):
-            score = get_score(tetris.game_area(), child_model,
-                              tetris, s_lines)
+            score = get_score(tetris, child_model, s_lines)
             if score is not None and score >= best_action_score:
                 best_action_score = score
                 best_action = {'Turn': move_dir['Turn'],
@@ -65,8 +64,7 @@ def eval_genome(epoch, child_index, child_model):
         # Do left
         for move_dir in do_action('Left', pyboy, n_dir=lefts_needed,
                                   n_turn=turns_needed):
-            score = get_score(tetris.game_area(), child_model,
-                              tetris, s_lines)
+            score = get_score(tetris, child_model, s_lines)
             if score is not None and score >= best_action_score:
                 best_action_score = score
                 best_action = {'Turn': move_dir['Turn'],
@@ -78,8 +76,7 @@ def eval_genome(epoch, child_index, child_model):
         # Do right
         for move_dir in do_action('Right', pyboy, n_dir=rights_needed,
                                   n_turn=turns_needed):
-            score = get_score(tetris.game_area(), child_model,
-                              tetris, s_lines)
+            score = get_score(tetris, child_model, s_lines)
             if score is not None and score >= best_action_score:
                 best_action_score = score
                 best_action = {'Turn': move_dir['Turn'],
@@ -116,7 +113,10 @@ def eval_genome(epoch, child_index, child_model):
           (scores, levels, lines))
     print("Fitness: %s" % child_fitness)
     print("Output weight:")
-    print(child_model.output.weight.data)
+    weights = {}
+    for i, j in zip(feature_names, child_model.output.weight.data.tolist()[0]):
+        weights[i] = np.round(j, 3)
+    print(weights)
 
     return child_fitness
 
