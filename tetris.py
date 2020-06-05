@@ -2,22 +2,37 @@ import io
 import pickle
 import numpy as np
 import torch
+import logging
+import sys
 
 from datetime import datetime
 from core.gen_algo import get_score, Population
 from core.utils import check_needed_turn, do_action, drop_down, \
     do_sideway, do_turn, check_needed_dirs, feature_names
 from pyboy import PyBoy
-from multiprocessing import Pool
+from multiprocessing import Pool, cpu_count
 
 
-epochs = 25
+logger = logging.getLogger("tetris")
+logger.setLevel(logging.INFO)
+
+fh = logging.FileHandler('logs.out')
+fh.setLevel(logging.INFO)
+logger.addHandler(fh)
+
+ch = logging.StreamHandler()
+ch.setLevel(logging.INFO)
+formatter = logging.Formatter('%(message)s')
+ch.setFormatter(formatter)
+logger.addHandler(ch)
+
+epochs = 50
 population = None
 run_per_child = 3
 max_fitness = 0
-pop_size = 30
+pop_size = 50
 max_score = 999999
-n_workers = 10
+n_workers = cpu_count()
 
 
 def eval_genome(epoch, child_index, child_model):
@@ -107,22 +122,23 @@ def eval_genome(epoch, child_index, child_model):
             run += 1
 
     child_fitness = np.average(scores)
-    print("-" * 20)
-    print("Iteration %s - child %s" % (epoch, child_index))
-    print("Score: %s, Level: %s, Lines %s" %
-          (scores, levels, lines))
-    print("Fitness: %s" % child_fitness)
-    print("Output weight:")
+    logger.info("-" * 20)
+    logger.info("Iteration %s - child %s" % (epoch, child_index))
+    logger.info("Score: %s, Level: %s, Lines %s" % (scores, levels, lines))
+    logger.info("Fitness: %s" % child_fitness)
+    logger.info("Output weight:")
     weights = {}
     for i, j in zip(feature_names, child_model.output.weight.data.tolist()[0]):
         weights[i] = np.round(j, 3)
-    print(weights)
+    logger.info(weights)
 
     return child_fitness
 
 
 if __name__ == '__main__':
     e = 0
+    p = Pool(n_workers)
+
     while e < epochs:
         start_time = datetime.now()
         if population is None:
@@ -134,7 +150,6 @@ if __name__ == '__main__':
         else:
             population = Population(size=pop_size, old_population=population)
 
-        p = Pool(n_workers)
         result = [0] * pop_size
         for i in range(pop_size):
             result[i] = p.apply_async(
@@ -143,18 +158,21 @@ if __name__ == '__main__':
         for i in range(pop_size):
             population.fitnesses[i] = result[i].get()
 
-        print("-" * 20)
-        print("Iteration %s fitnesses %s" %
-              (e, np.round(population.fitnesses, 2)))
-        print(
+        logger.info("-" * 20)
+        logger.info("Iteration %s fitnesses %s" % (
+            e, np.round(population.fitnesses, 2)))
+        logger.info(
             "Iteration %s max fitness %s " % (e, np.max(population.fitnesses)))
-        print(
+        logger.info(
             "Iteration %s mean fitness %s " % (e, np.mean(
                 population.fitnesses)))
-        print("Time took", datetime.now() - start_time)
-        print("Best child output weights:")
-        print(population.models[np.argmax(
-            population.fitnesses)].output.weight.T)
+        logger.info("Time took", datetime.now() - start_time)
+        logger.info("Best child output weights:")
+        weights = {}
+        for i, j in zip(feature_names, population.models[np.argmax(
+                population.fitnesses)].output.weight.data.tolist()[0]):
+            weights[i] = np.round(j, 3)
+        logger.info(weights)
         # Saving population
         with open('checkpoint/checkpoint-%s.pkl' % e, 'wb') as f:
             pickle.dump(population, f)
@@ -169,3 +187,6 @@ if __name__ == '__main__':
                     population.fitnesses)].state_dict(),
                 'models/%s' % file_name)
         e += 1
+
+    p.join()
+    p.close()
