@@ -3,7 +3,7 @@ import numpy as np
 
 from core.gen_algo import Network
 from multiprocessing import Pool
-from tetris import eval_genome
+from tetris import eval_network
 
 state_dict = torch.load('models/best.pkl')
 model = Network()
@@ -18,7 +18,7 @@ scores = [0] * n_plays
 p = Pool(n_workers)
 
 for i in range(n_plays):
-    result[i] = p.apply_async(eval_genome, (0, i, model))
+    result[i] = p.apply_async(eval_network, (0, i, model))
 
 for i in range(n_plays):
     scores[i] = result[i].get()

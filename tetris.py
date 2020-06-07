@@ -22,8 +22,6 @@ logger.addHandler(fh)
 
 ch = logging.StreamHandler()
 ch.setLevel(logging.INFO)
-formatter = logging.Formatter('%(message)s')
-ch.setFormatter(formatter)
 logger.addHandler(ch)
 
 epochs = 50
@@ -35,7 +33,7 @@ max_score = 999999
 n_workers = cpu_count()
 
 
-def eval_genome(epoch, child_index, child_model):
+def eval_network(epoch, child_index, child_model):
     pyboy = PyBoy('tetris_1.1.gb', game_wrapper=True, window_type="headless")
     pyboy.set_emulation_speed(0)
     tetris = pyboy.game_wrapper()
@@ -153,7 +151,7 @@ if __name__ == '__main__':
         result = [0] * pop_size
         for i in range(pop_size):
             result[i] = p.apply_async(
-                eval_genome, (e, i, population.models[i]))
+                eval_network, (e, i, population.models[i]))
 
         for i in range(pop_size):
             population.fitnesses[i] = result[i].get()
@@ -166,7 +164,7 @@ if __name__ == '__main__':
         logger.info(
             "Iteration %s mean fitness %s " % (e, np.mean(
                 population.fitnesses)))
-        logger.info("Time took", datetime.now() - start_time)
+        logger.info("Time took %s" % (datetime.now() - start_time))
         logger.info("Best child output weights:")
         weights = {}
         for i, j in zip(feature_names, population.models[np.argmax(
