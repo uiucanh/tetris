@@ -10,7 +10,7 @@ elitism_pct = 0.2
 mutation_prob = 0.5
 weights_init_min = -1
 weights_init_max = 1
-weights_mutate_power = 0.1
+weights_mutate_power = 0.5
 
 device = 'cpu'
 
