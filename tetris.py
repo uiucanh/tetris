@@ -26,7 +26,7 @@ logger.addHandler(ch)
 
 epochs = 50
 population = None
-run_per_child = 1
+run_per_child = 3
 max_fitness = 0
 pop_size = 50
 max_score = 999999
