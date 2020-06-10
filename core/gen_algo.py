@@ -14,6 +14,7 @@ weights_mutate_power = 0.5
 
 device = 'cpu'
 
+
 class Network(nn.Module):
     def __init__(self, output_w=None):
         super(Network, self).__init__()
@@ -71,15 +72,15 @@ class Population:
                 model_a, model_b = self.old_models[a], self.old_models[b]
                 model_c = Network()
 
-                for j in range(output_size):
+                for j in range(input_size):
                     # Neuron will come from A with probability
                     # of `prob_neuron_from_a`
                     if np.random.random() > prob_neuron_from_a:
-                        model_c.output.weight.data[j] = \
-                            model_b.output.weight.data[j]
+                        model_c.output.weight.data[0][j] = \
+                            model_b.output.weight.data[0][j]
                     else:
-                        model_c.output.weight.data[j] = \
-                            model_a.output.weight.data[j]
+                        model_c.output.weight.data[0][j] = \
+                            model_a.output.weight.data[0][j]
 
             self.models.append(model_c)
 
@@ -87,13 +88,12 @@ class Population:
         print("Mutating")
         for model in self.models:
             # Mutating weights by adding Gaussian noises
-            for i in range(len(model.output.weight.data)):
-                if np.random.random() < mutation_prob:
+            if np.random.random() < mutation_prob:
+                for i in range(input_size):
                     with torch.no_grad():
-                        noise = torch.randn(
-                            model.output.weight.data[i].size()).mul_(
+                        noise = torch.randn(1).mul_(
                             weights_mutate_power).to(device)
-                        model.output.weight.data[i].add_(noise)
+                        model.output.weight.data[0][i].add_(noise[0])
 
 
 def get_score(tetris, model, s_lines, neat=False):
