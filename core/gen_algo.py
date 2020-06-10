@@ -88,8 +88,8 @@ class Population:
         print("Mutating")
         for model in self.models:
             # Mutating weights by adding Gaussian noises
-            if np.random.random() < mutation_prob:
-                for i in range(input_size):
+            for i in range(input_size):
+                if np.random.random() < mutation_prob:
                     with torch.no_grad():
                         noise = torch.randn(1).mul_(
                             weights_mutate_power).to(device)
