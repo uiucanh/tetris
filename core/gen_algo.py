@@ -7,7 +7,7 @@ input_size = 9
 output_size = 1
 
 elitism_pct = 0.2
-mutation_prob = 0.5
+mutation_prob = 0.2
 weights_init_min = -1
 weights_init_max = 1
 weights_mutate_power = 0.5
