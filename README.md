@@ -2,7 +2,7 @@
 This repo contains the implementation of an agent for the original Tetris (GameBoy)
 using genetics aglorithm.
 
-Medium article: 
+[Medium article](https://medium.com/@bdanh96/beating-the-world-record-in-tetris-gb-with-genetics-algorithm-6c0b2f5ace9b) 
 
 # Installation
 Using `pip`
