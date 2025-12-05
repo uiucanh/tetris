@@ -255,7 +255,7 @@ def do_action(action, pyboy, n_dir, n_turn):
 def do_best_action(get_score, pyboy, tetris, model, neat):
 
     # Beginning of action
-    best_child_score = np.NINF
+    best_child_score = -np.inf
     best_action = {'Turn': 0, 'Left': 0, 'Right': 0}
     begin_state = io.BytesIO()
     begin_state.seek(0)
