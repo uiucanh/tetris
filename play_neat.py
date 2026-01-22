@@ -1,102 +1,105 @@
-import sys
-import io
 import pickle
 import numpy as np
+import argparse
+import visualize
+import os
+import neat
 
-from core.utils import check_needed_dirs, check_needed_turn, do_action, \
-    do_turn, do_sideway, drop_down
+from core.utils import do_best_action, spawn_pyboy
 from core.gen_algo import get_score
-from pyboy import PyBoy
 
-n_plays = 10
 
-quiet = "--quiet" in sys.argv
-pyboy = PyBoy('tetris_1.1.gb', game_wrapper=True,
-              window_type="headless" if quiet else "SDL2")
-pyboy.set_emulation_speed(0)
+def main(model_path, runs, draw, config_path):
 
-tetris = pyboy.game_wrapper()
-tetris.start_game()
+    pyboy, tetris = spawn_pyboy(show=True)
 
-# Set block animation to fall instantly
-pyboy.set_memory_value(0xff9a, 2)
-with open('neat_models/999999', 'rb') as f:
-    model = pickle.load(f)
-scores = []
-lines = []
-n = 0
+    with open(model_path, 'rb') as f:
+        model = pickle.load(f)
 
-while n < n_plays:
-    # Beginning of action
-    best_child_score = np.NINF
-    best_action = {'Turn': 0, 'Left': 0, 'Right': 0}
-    begin_state = io.BytesIO()
-    begin_state.seek(0)
-    pyboy.save_state(begin_state)
-    s_lines = tetris.lines
+    scores = []
+    lines = []
+    n = 0
 
-    # Determine how many possible rotations we need to check for the block
-    block_tile = pyboy.get_memory_value(0xc203)
-    turns_needed = check_needed_turn(block_tile)
-    lefts_needed, rights_needed = check_needed_dirs(block_tile)
+    while n < runs:
 
-    # Do middle
-    for move_dir in do_action('Middle', pyboy, n_dir=1,
-                              n_turn=turns_needed):
-        score = get_score(tetris, model, s_lines, neat=True)
-        if score is not None and score > best_child_score:
-            best_child_score = score
-            best_action = {'Turn': move_dir['Turn'],
-                           'Left': move_dir['Left'],
-                           'Right': move_dir['Right']}
-        begin_state.seek(0)
-        pyboy.load_state(begin_state)
+        do_best_action(get_score, pyboy, tetris, model, neat=True)
 
-    # Do left
-    for move_dir in do_action('Left', pyboy, n_dir=lefts_needed,
-                              n_turn=turns_needed):
-        score = get_score(tetris, model, s_lines, neat=True)
-        if score is not None and score > best_child_score:
-            best_child_score = score
-            best_action = {'Turn': move_dir['Turn'],
-                           'Left': move_dir['Left'],
-                           'Right': move_dir['Right']}
-        begin_state.seek(0)
-        pyboy.load_state(begin_state)
+        if tetris.game_over():
+            print(tetris.score)
+            print(tetris.lines)
+            scores.append(tetris.score)
+            lines.append(tetris.lines)
+            n += 1
+            tetris.reset_game()
 
-    # Do right
-    for move_dir in do_action('Right', pyboy, n_dir=rights_needed,
-                              n_turn=turns_needed):
-        score = get_score(tetris, model, s_lines, neat=True)
-        if score is not None and score > best_child_score:
-            best_child_score = score
-            best_action = {'Turn': move_dir['Turn'],
-                           'Left': move_dir['Left'],
-                           'Right': move_dir['Right']}
-        begin_state.seek(0)
-        pyboy.load_state(begin_state)
+    print("Scores:", scores)
+    print("Average:", np.average(scores))
+    print("---")
+    print("Lines:", lines)
+    print("Average:", np.average(lines))
 
-    # Do best action
-    for i in range(best_action['Turn']):
-        do_turn(pyboy)
-    for i in range(best_action['Left']):
-        do_sideway(pyboy, 'Left')
-    for i in range(best_action['Right']):
-        do_sideway(pyboy, 'Right')
-    drop_down(pyboy)
-    pyboy.tick()
+    if draw:
+        config = neat.config.Config(
+            neat.DefaultGenome,
+            neat.DefaultReproduction,
+            neat.DefaultSpeciesSet,
+            neat.DefaultStagnation,
+            config_path,
+        )
+        node_names = {
+            -1: 'agg_height',
+            -2: 'n_holes',
+            -3: 'bumpiness',
+            -4: 'cleared',
+            -5: 'num_pits',
+            -6: 'max_wells',
+            -7: 'n_cols_with_holes',
+            -8: 'row_transitions',
+            -9: 'col_transitions',
+            -10: 'block_bit_1',
+            -11: 'block_bit_2',
+            -12: 'block_bit_3',
+            0: 'Score',
+        }
 
-    # Game over:
-    if tetris.game_over():
-        print(tetris.score)
-        print(tetris.lines)
-        scores.append(tetris.score)
-        lines.append(tetris.lines)
-        n += 1
-        tetris.reset_game()
+        with open(model_path + '_genome', 'rb') as f:
+            genome = pickle.load(f)
+        visualize.draw_net(config, genome, True, node_names=node_names)
 
-print("Scores:", scores)
-print("Average:", np.average(scores))
-print("---")
-print("Lines:", lines)
-print("Average:", np.average(lines))
+
+def cli_args():
+    parser = argparse.ArgumentParser("Tetris neat model player")
+    parser.add_argument(
+        'model_path',
+        help="Path to neat model",
+        type=str,
+    )
+    parser.add_argument(
+        '-r',
+        '--runs',
+        help="Tetris games played",
+        type=int,
+        default=1,
+    )
+    parser.add_argument(
+        '-d',
+        '--draw',
+        help="Draw network after playing",
+        default=False,
+        action='store_true',
+    )
+
+    return parser.parse_args()
+
+
+if __name__ == '__main__':
+    local_dir = os.path.dirname(__file__)
+    config_path = os.path.join(local_dir, 'config', 'config-feedforward.txt')
+
+    args = cli_args()
+    main(
+        model_path=args.model_path,
+        runs=args.runs,
+        draw=args.draw,
+        config_path=config_path,
+    )

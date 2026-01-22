@@ -96,13 +96,19 @@ class Population:
                         model.output.weight.data[0][i].add_(noise[0])
 
 
-def get_score(tetris, model, s_lines, neat=False):
+def get_score(tetris, model, s_lines, neat=False, next_block=None):
     area = np.asarray(tetris.game_area())
     # Convert blank areas into 0 and block into 1
     area = (area != 47).astype(np.int16)
 
     try:
-        inputs = get_board_info(area, tetris, s_lines)
+        inputs = get_board_info(
+            area,
+            tetris,
+            s_lines,
+            next_block=next_block,
+            neat=neat
+        )
     except Exception as e:
         print(e)
         return None

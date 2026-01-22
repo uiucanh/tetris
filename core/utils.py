@@ -1,6 +1,9 @@
 import numpy as np
+import io
 
-from pyboy import WindowEvent
+from pyboy import PyBoy
+from pyboy.utils import WindowEvent
+
 
 # Action map
 action_map = {
@@ -35,7 +38,7 @@ def get_current_block_text(block_tile):
         return 'T'
 
 
-def get_board_info(area, tetris, s_lines):
+def get_board_info(area, tetris, s_lines, next_block, neat=False):
     """
     area: a numpy matrix representation of the board
     tetris: game wrapper
@@ -73,8 +76,38 @@ def get_board_info(area, tetris, s_lines):
     # The number of lines gained with the move
     cleared = (tetris.lines - s_lines) * 8
 
-    return agg_height, n_holes, bumpiness, cleared, num_pits, max_wells, \
-        n_cols_with_holes, row_transitions, col_transitions
+    res = (
+        agg_height,
+        n_holes,
+        bumpiness,
+        cleared,
+        num_pits,
+        max_wells,
+        n_cols_with_holes,
+        row_transitions,
+        col_transitions,
+    )
+
+    if neat:
+        # experimental neat addition: also pass next tetromino (block) to model
+        # on 3 additional inputs
+        next_block_bits = {
+            "L": (0, 0, 0),
+            "J": (0, 0, 1),
+            "I": (0, 1, 0),
+            "O": (0, 1, 1),
+            "Z": (1, 0, 0),
+            "S": (1, 0, 1),
+            "T": (1, 1, 0),
+        }
+        bits = next_block_bits[next_block]
+
+        res = (
+            *res,
+            *bits,
+        )
+
+    return res
 
 
 def get_peaks(area):
@@ -195,7 +228,7 @@ def drop_down(pyboy):
     # a new piece to spawn and have y_value of start_y.
     # The bool started_moving is used to prevent the loop not running at start.
     started_moving = False
-    while pyboy.get_memory_value(0xc201) != start_y or not started_moving:
+    while pyboy.memory[0xc201] != start_y or not started_moving:
         started_moving = True
         do_down(pyboy)
 
@@ -217,3 +250,65 @@ def do_action(action, pyboy, n_dir, n_turn):
             yield {'Turn': turn,
                    'Left': dir_count if action == 'Left' else 0,
                    'Right': dir_count if action == 'Right' else 0}
+
+
+def do_best_action(get_score, pyboy, tetris, model, neat):
+
+    # Beginning of action
+    best_child_score = -np.inf
+    best_action = {'Turn': 0, 'Left': 0, 'Right': 0}
+    begin_state = io.BytesIO()
+    begin_state.seek(0)
+    pyboy.save_state(begin_state)
+    s_lines = tetris.lines
+
+    # Determine how many possible rotations we need to check for the block
+    block_tile = pyboy.memory[0xc203]
+    turns_needed = check_needed_turn(block_tile)
+    lefts_needed, rights_needed = check_needed_dirs(block_tile)
+    next_block = tetris.next_tetromino()
+
+    actions = {
+        'Middle': 1,
+        'Left': lefts_needed,
+        'Right': rights_needed,
+    }
+
+    for action, n_dir in actions.items():
+        for move_dir in do_action(action, pyboy, n_dir=n_dir,
+                                  n_turn=turns_needed):
+            score = get_score(
+                tetris,
+                model,
+                s_lines,
+                neat=neat,
+                next_block=next_block,
+            )
+            if score is not None and score > best_child_score:
+                best_child_score = score
+                best_action = move_dir.copy()
+            begin_state.seek(0)
+            pyboy.load_state(begin_state)
+
+    # Do best action
+    for i in range(best_action['Turn']):
+        do_turn(pyboy)
+    for i in range(best_action['Left']):
+        do_sideway(pyboy, 'Left')
+    for i in range(best_action['Right']):
+        do_sideway(pyboy, 'Right')
+    drop_down(pyboy)
+    pyboy.tick()
+
+    return best_action
+
+
+def spawn_pyboy(show=False):
+    window = "SDL2" if show else "null"
+    pyboy = PyBoy('tetris.gb', window=window)
+    pyboy.set_emulation_speed(0)
+    tetris = pyboy.game_wrapper
+    tetris.start_game()
+    # Set block animation to fall instantly
+    pyboy.memory[0xff9a] = 2
+    return pyboy, tetris
